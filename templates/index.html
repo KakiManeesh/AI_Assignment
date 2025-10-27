@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Music Genre Classification</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+      h1 {
+        text-align: center;
+      }
+      form {
+        margin-bottom: 20px;
+      }
+      input[type="file"] {
+        margin-bottom: 10px;
+      }
+      button {
+        padding: 10px 20px;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        cursor: pointer;
+      }
+      button:hover {
+        background-color: #0056b3;
+      }
+      .result {
+        margin-top: 20px;
+        padding: 10px;
+        background-color: #f0f0f0;
+        border-radius: 5px;
+      }
+      .error {
+        color: red;
+      }
+      ul {
+        list-style-type: none;
+        padding: 0;
+      }
+      li {
+        margin: 5px 0;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Music Genre Classification</h1>
+    <p>
+      Upload a music file (WAV or MP3) to predict its genre using machine
+      learning.
+    </p>
+    <form action="/predict" method="post" enctype="multipart/form-data">
+      <input type="file" name="file" accept=".wav,.mp3" required />
+      <br />
+      <button type="submit">Predict Genre</button>
+    </form>
+    {% if genre %}
+    <div class="result">
+      <h2>Prediction Result</h2>
+      <p><strong>Predicted Genre:</strong> {{ genre }}</p>
+      <p><strong>Confidence Scores:</strong></p>
+      <ul>
+        {% for g, c in confidence.items() %}
+        <li>{{ g }}: {{ "%.3f"|format(c) }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %} {% if error %}
+    <div class="result error">
+      <p>{{ error }}</p>
+    </div>
+    {% endif %}
+  </body>
+</html>
