@@ -46,6 +46,73 @@
       li {
         margin: 5px 0;
       }
+      .progress-section {
+        margin-top: 20px;
+        padding: 15px;
+        background-color: #e8f5e8;
+        border-radius: 5px;
+        border-left: 4px solid #28a745;
+      }
+      .progress-section h3 {
+        margin-top: 0;
+        color: #155724;
+        font-size: 1.2em;
+      }
+      .progress-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 20px;
+      }
+      .circular-progress {
+        position: relative;
+        width: 150px;
+        height: 150px;
+      }
+      .progress-svg {
+        width: 100%;
+        height: 100%;
+        transform: rotate(-90deg);
+      }
+      .progress-background {
+        fill: none;
+        stroke: #e9ecef;
+        stroke-width: 8;
+      }
+      .progress-bar {
+        fill: none;
+        stroke: #007bff;
+        stroke-width: 8;
+        stroke-linecap: round;
+        transition: stroke-dasharray 0.5s ease;
+      }
+      .progress-center {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        text-align: center;
+        font-weight: bold;
+        line-height: 1.2;
+      }
+      .progress-percentage {
+        font-size: 24px;
+        color: #007bff;
+      }
+      .progress-segment {
+        font-size: 12px;
+        color: #6c757d;
+      }
+      .progress-step-text {
+        font-family: "Courier New", monospace;
+        font-size: 14px;
+        color: #333;
+        text-align: center;
+        min-height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
     </style>
   </head>
   <body>
@@ -57,7 +124,35 @@
     <form action="/predict" method="post" enctype="multipart/form-data">
       <input type="file" name="file" accept=".wav,.mp3" required />
       <br />
-      <button type="submit">Predict Genre</button>
+      <button type="submit" id="predict-button">Predict Genre</button>
+      <div id="progress-container" style="margin-top: 20px; display: none">
+        <div class="progress-section">
+          <h3>Real-time Processing Progress</h3>
+          <div class="progress-container">
+            <div class="circular-progress">
+              <svg class="progress-svg" viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="45" class="progress-background" />
+                <circle
+                  cx="50"
+                  cy="50"
+                  r="45"
+                  class="progress-bar"
+                  id="progress-circle"
+                />
+              </svg>
+              <div class="progress-center">
+                <div class="progress-percentage" id="progress-percentage">
+                  0%
+                </div>
+                <div class="progress-segment" id="progress-segment"></div>
+              </div>
+            </div>
+            <div class="progress-step-text" id="progress-step-text">
+              Initializing...
+            </div>
+          </div>
+        </div>
+      </div>
     </form>
     {% if genre %}
     <div class="result">
@@ -75,5 +170,101 @@
       <p>{{ error }}</p>
     </div>
     {% endif %}
+    <script>
+      const progressContainer = document.getElementById("progress-container");
+      const progressCircle = document.getElementById("progress-circle");
+      const progressPercentage = document.getElementById("progress-percentage");
+      const progressSegment = document.getElementById("progress-segment");
+      const progressStepText = document.getElementById("progress-step-text");
+      const predictButton = document.getElementById("predict-button");
+      const form = document.querySelector("form");
+
+      const circumference = 2 * Math.PI * 45; // Circle radius = 45
+      let pollingInterval = null;
+
+      form.addEventListener("submit", function (e) {
+        e.preventDefault(); // Prevent default form submission
+
+        predictButton.disabled = true;
+        predictButton.textContent = "Processing...";
+
+        progressContainer.style.display = "block";
+        startProgressPolling();
+
+        // Submit form data via AJAX
+        const formData = new FormData(form);
+        fetch("/predict", {
+          method: "POST",
+          body: formData,
+        })
+          .then((response) => response.text())
+          .then((html) => {
+            // Stop polling
+            stopProgressPolling();
+
+            // Replace the entire page content
+            document.documentElement.innerHTML = html;
+
+            predictButton.disabled = false;
+            predictButton.textContent = "Predict Genre";
+          })
+          .catch((error) => {
+            stopProgressPolling();
+            predictButton.disabled = false;
+            predictButton.textContent = "Predict Genre";
+            console.error("Error:", error);
+          });
+      });
+
+      function startProgressPolling() {
+        pollingInterval = setInterval(() => {
+          fetch("/progress")
+            .then((response) => response.json())
+            .then((data) => {
+              updateCircularProgress(data);
+
+              // Auto-stop polling when results are ready
+              if (data.has_result) {
+                stopProgressPolling();
+              }
+            })
+            .catch((error) => {
+              console.log("Polling error:", error);
+            });
+        }, 1000); // Poll every 1 second
+      }
+
+      function stopProgressPolling() {
+        if (pollingInterval) {
+          clearInterval(pollingInterval);
+          pollingInterval = null;
+        }
+      }
+
+      function updateCircularProgress(data) {
+        const percentage = data.progress_percentage || 0;
+        const stepText = data.current_step || "";
+        const currentSegment = data.current_segment || 0;
+        const totalSegments = data.total_segments || 0;
+
+        // Update percentage display
+        progressPercentage.textContent = `${percentage}%`;
+
+        // Update segment display
+        if (currentSegment > 0 && totalSegments > 0) {
+          progressSegment.textContent = `Segment ${currentSegment}/${totalSegments}`;
+        } else {
+          progressSegment.textContent = "";
+        }
+
+        // Update step text
+        progressStepText.textContent = stepText;
+
+        // Animate circular progress
+        const offset = circumference - (percentage / 100) * circumference;
+        progressCircle.style.strokeDasharray = `${circumference} ${circumference}`;
+        progressCircle.style.strokeDashoffset = offset;
+      }
+    </script>
   </body>
 </html>

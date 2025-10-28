@@ -17,6 +17,9 @@ scaler = joblib.load(os.path.join(base_path, "scaler.save"))
 label_encoder = joblib.load(os.path.join(base_path, "label_encoder.save"))
 genres = label_encoder.classes_
 
+# Global variable to store progress updates
+progress_updates = []
+
 
 def remove_vocals_with_demucs(audio_path):
     """Removes vocals using Demucs CLI."""
@@ -79,20 +82,60 @@ def extract_features(segment, sr=22050):
 
 def predict_genre_song(audio_path, segment_sec=3, remove_vocals=False):
     """Predict genre for long song with confidence voting."""
+    global progress_updates
+    progress_updates = []  # Reset progress updates
+
     # Note: Vocal removal disabled for simplicity
+    progress_updates.append(
+        {
+            "message": "📁 Loading audio file...",
+            "progress": 5,
+            "current_segment": 0,
+            "total_segments": 0,
+        }
+    )
 
     # Convert to wav if mp3
     if audio_path.lower().endswith(".mp3"):
+        progress_updates.append(
+            {
+                "message": "🔄 Converting MP3 to WAV...",
+                "progress": 10,
+                "current_segment": 0,
+                "total_segments": 0,
+            }
+        )
         wav_path = audio_path.replace(".mp3", ".wav")
         AudioSegment.from_mp3(audio_path).export(wav_path, format="wav")
         audio_path = wav_path
 
-    # Load audio
+    progress_updates.append(
+        {
+            "message": "🎵 Loading audio data...",
+            "progress": 15,
+            "current_segment": 0,
+            "total_segments": 0,
+        }
+    )
+
+    # Load audio and calculate total segments
     y, sr = librosa.load(audio_path, sr=22050, mono=True)
     segment_len = sr * segment_sec
     total_len = len(y)
+    total_segments_calculated = max(1, int(total_len // segment_len))
+
     genre_confidence = defaultdict(float)
     total_segments = 0
+
+    duration_str = f"{total_len / sr:.1f}s"
+    progress_updates.append(
+        {
+            "message": f"⏱️ Analyzing {duration_str} audio in {segment_sec}s segments...",
+            "progress": 20,
+            "current_segment": 0,
+            "total_segments": total_segments_calculated,
+        }
+    )
 
     print(f"\nAnalyzing {total_len / sr:.1f}s audio in {segment_sec}s chunks...\n")
 
@@ -100,6 +143,19 @@ def predict_genre_song(audio_path, segment_sec=3, remove_vocals=False):
         segment = y[start : start + segment_len]
         if len(segment) < sr:  # skip too short
             continue
+
+        segment_num = total_segments + 1
+
+        # Calculate progress percentage: 20% base + (segment_num / total_segments_calculated) * 70%
+        progress_percent = 20 + int((segment_num / total_segments_calculated) * 60)
+        progress_updates.append(
+            {
+                "message": f"⚙️ Processing segment {segment_num}/{total_segments_calculated}...",
+                "progress": min(progress_percent, 80),
+                "current_segment": segment_num,
+                "total_segments": total_segments_calculated,
+            }
+        )
 
         features = extract_features(segment, sr)
         features_scaled = scaler.transform(features)
@@ -112,14 +168,50 @@ def predict_genre_song(audio_path, segment_sec=3, remove_vocals=False):
         total_segments += 1
 
     if not total_segments:
+        progress_updates.append(
+            {
+                "message": "❌ No valid segments found.",
+                "progress": 0,
+                "current_segment": 0,
+                "total_segments": 0,
+            }
+        )
         print("❌ No valid segments found.")
         return None
+
+    progress_updates.append(
+        {
+            "message": "📊 Calculating confidence scores...",
+            "progress": 90,
+            "current_segment": total_segments_calculated,
+            "total_segments": total_segments_calculated,
+        }
+    )
 
     # Normalize confidence scores
     for genre in genre_confidence:
         genre_confidence[genre] /= total_segments
 
     final_genre = max(genre_confidence, key=genre_confidence.get)
+
+    progress_updates.append(
+        {
+            "message": f"🎵 Predicted genre: {final_genre.upper()}",
+            "progress": 95,
+            "current_segment": total_segments_calculated,
+            "total_segments": total_segments_calculated,
+        }
+    )
+
+    progress_updates.append(
+        {
+            "message": f"✨ Processing complete!",
+            "progress": 100,
+            "current_segment": total_segments_calculated,
+            "total_segments": total_segments_calculated,
+        }
+    )
+
     print("\nSegment-wise confidence summary:")
     for g, c in sorted(genre_confidence.items(), key=lambda x: -x[1]):
         print(f"  {g:<10}: {c:.3f}")
